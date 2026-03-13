@@ -25,6 +25,8 @@ jobs:
         run: uv run ruff check .
       - name: Test
         run: uv run pytest tests/ -v
+        env:
+          PO_LINT_COMPACT_MODEL: "1"
 
   publish:
     needs: test

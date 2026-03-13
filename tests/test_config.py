@@ -1,7 +1,6 @@
 """Tests for configuration loading."""
 
 from pathlib import Path
-from unittest.mock import patch
 
 from po_lint.config import Config, load_config
 

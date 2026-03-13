@@ -4,7 +4,6 @@ from pathlib import Path
 
 from po_lint.checks import IssueType
 from po_lint.detector import (
-    DEFAULT_MIN_DETECTION_LENGTH,
     _normalize_locale,
     clean_text,
     detect_language,

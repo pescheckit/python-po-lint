@@ -53,7 +53,7 @@ def load_ignore_rules(locale_dir: Path) -> list[IgnoreRule]:
         if line.startswith("["):
             bracket_end = line.index("]")
             lang_str = line[1:bracket_end]
-            languages = {l.strip() for l in lang_str.split(",")}
+            languages = {lang.strip() for lang in lang_str.split(",")}
             line = line[bracket_end + 1:].strip()
 
         # Parse optional context: msgctxt::msgid
