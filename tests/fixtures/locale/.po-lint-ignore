@@ -1,0 +1,13 @@
+# Test ignore file
+
+# Plain msgid — ignored for all languages
+Cancel
+
+# Scoped to Dutch only
+[nl] Welcome to the dashboard
+
+# With message context
+some_context::Save changes
+
+# Language-scoped with context
+[fr] french_context::Enregistrer les modifications

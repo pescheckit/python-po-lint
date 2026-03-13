@@ -1,0 +1,20 @@
+# Dutch translations — mix of clean and contaminated entries
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: nl\n"
+
+msgid "Welcome to the dashboard"
+msgstr "Welkom op het dashboard"
+
+msgid "Save changes"
+msgstr "Wijzigingen opslaan"
+
+msgid "Please enter your email address to receive a verification link. This will allow you to confirm your identity and proceed with the registration process."
+msgstr "Oui"
+
+msgid "This is a long description that explains how the screening process works and what steps the candidate needs to follow in order to complete the background check successfully."
+msgstr "Это описание на русском языке которое не должно быть в голландском файле перевода"
+
+msgid "Cancel"
+msgstr "Annuleren"

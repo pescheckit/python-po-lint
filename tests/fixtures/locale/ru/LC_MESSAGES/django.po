@@ -1,0 +1,14 @@
+# Russian translations — all clean
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru\n"
+
+msgid "Welcome to the dashboard"
+msgstr "Добро пожаловать на панель управления"
+
+msgid "Save changes"
+msgstr "Сохранить изменения"
+
+msgid "The screening process has been completed successfully"
+msgstr "Процесс проверки успешно завершён"

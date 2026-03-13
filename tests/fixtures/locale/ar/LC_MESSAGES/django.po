@@ -1,0 +1,14 @@
+# Arabic translations — wrong script contamination
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ar\n"
+
+msgid "Welcome to the dashboard"
+msgstr "مرحبا بكم في لوحة القيادة"
+
+msgid "The candidate has completed all required checks and the screening report is now available for review."
+msgstr "De kandidaat heeft alle vereiste controles voltooid en het screeningsrapport is nu beschikbaar voor beoordeling"
+
+msgid "Save changes"
+msgstr "حفظ التغييرات"

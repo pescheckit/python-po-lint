@@ -1,0 +1,17 @@
+# French translations — mix of clean and contaminated entries
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+
+msgid "Welcome to the dashboard"
+msgstr "Bienvenue sur le tableau de bord"
+
+msgid "Please review the candidate's documents carefully before approving the background check. Ensure all required fields are filled in correctly."
+msgstr "这是中文文本不应该出现在法语翻译文件中需要被检测到并标记为错误"
+
+msgid "Save changes"
+msgstr "Enregistrer les modifications"
+
+msgid "The screening process has been completed successfully and all checks have passed the verification requirements."
+msgstr "Ja natuurlijk"
