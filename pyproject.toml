@@ -1,6 +1,6 @@
 [project]
 name = "python-po-lint"
-version = "0.1.1"
+dynamic = ["version"]
 description = "Lint .po translation files for contamination, wrong languages, shifts, and garbled text"
 readme = "README.md"
 license = "MIT"
@@ -18,8 +18,14 @@ dependencies = [
 po-lint = "po_lint.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/po_lint/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/po_lint"]

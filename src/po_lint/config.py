@@ -27,6 +27,7 @@ class Config:
     min_detection_length: int = 30
     ignore_patterns: list[str] = field(default_factory=list)
     compact_model: bool = False
+    check_untranslated: bool = True
 
     def resolve_locale_dirs(self, base_dir: Path) -> list[Path]:
         """Resolve all locale directories from paths and packages.
@@ -91,4 +92,5 @@ def load_config(project_dir: Path | None = None) -> Config:
         min_detection_length=tool_config.get("min_detection_length", 30),
         ignore_patterns=tool_config.get("ignore_patterns", []),
         compact_model=tool_config.get("compact_model", False),
+        check_untranslated=tool_config.get("check_untranslated", True),
     )

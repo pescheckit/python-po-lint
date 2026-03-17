@@ -52,6 +52,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Minimum cleaned text length for language detection (default: 30).",
     )
     parser.add_argument(
+        "--check-untranslated",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Check for untranslated entries (default: true). Use --no-check-untranslated to disable.",
+    )
+    parser.add_argument(
         "--compact-model",
         action="store_true",
         help="Use the compact fastText model (917KB, less accurate) instead of the full model (126MB).",
@@ -86,6 +92,10 @@ def main(argv: list[str] | None = None) -> int:
         args.min_detection_length if args.min_detection_length is not None
         else config.min_detection_length
     )
+    check_untranslated = (
+        args.check_untranslated if args.check_untranslated is not None
+        else config.check_untranslated
+    )
 
     # Resolve locale directories
     if args.paths:
@@ -117,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
             min_text_length=config.min_text_length,
             min_detection_length=min_detection_length,
             ignore_patterns=config.ignore_patterns,
+            check_untranslated=check_untranslated,
         )
         all_issues.extend(issues)
 

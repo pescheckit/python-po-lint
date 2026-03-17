@@ -1,6 +1,6 @@
 # python-po-lint
 
-Lint `.po` translation files for contamination, wrong languages, shifts, and garbled text.
+Lint `.po` translation files for contamination, wrong languages, missing translations, shifts, and garbled text.
 
 Uses [fastText](https://fasttext.cc/) language identification with carrier phrase confirmation and confused language score merging for high accuracy with zero false positives.
 
@@ -9,6 +9,7 @@ Uses [fastText](https://fasttext.cc/) language identification with carrier phras
 - **Wrong language detection** — fastText-based with top-5 scoring, confused language merging, and carrier phrase confirmation
 - **Wrong script detection** — catches Cyrillic in a Dutch file, Arabic in French, Latin in Chinese, etc.
 - **Distinctive character detection** — catches Russian-specific chars in Ukrainian and vice versa
+- **Untranslated entry detection** — flags missing translations, auto-detects source language
 - **Shifted entry detection** — finds translations that got shifted to the wrong msgid
 - **Garbled text detection** — catches corrupted/broken unicode
 - **Ignore rules** — `.po-lint-ignore` file with language scoping and msgctxt support
@@ -53,6 +54,9 @@ po-lint locale/ --min-detection-length 25
 
 # Specify source language (default: en)
 po-lint locale/ --source-language en
+
+# Disable untranslated entry check
+po-lint locale/ --no-check-untranslated
 ```
 
 ## Configuration
@@ -85,6 +89,10 @@ min_text_length = 3
 # Use compact fastText model instead of full
 compact_model = false
 
+# Check for untranslated entries (default: true)
+# Source language is auto-detected or set via source_language
+check_untranslated = true
+
 # Regex patterns to ignore (matched against msgid and msgstr)
 ignore_patterns = []
 ```
@@ -112,8 +120,9 @@ screening status::Some msgid
 1. **Wrong script check** — fast, no model needed. Checks if the translation uses the expected writing system.
 2. **Distinctive character check** — detects cross-contamination between languages sharing a script (e.g. Russian/Ukrainian).
 3. **Garbled text check** — flags corrupted unicode.
-4. **Shifted entry check** — flags suspiciously short translations for long source strings.
-5. **Wrong language check** — uses fastText with three layers of false positive prevention:
+4. **Untranslated entry check** — flags entries with empty `msgstr`. The source language is auto-detected (the locale where all entries are untranslated) or can be set explicitly. Skipped for the source language.
+5. **Shifted entry check** — flags suspiciously short translations for long source strings.
+6. **Wrong language check** — uses fastText with three layers of false positive prevention:
    - **Confused language score merging** — redistributes scores from commonly confused languages (e.g. Danish/Norwegian, Portuguese/Spanish)
    - **Source language allowance** — borrowed words from the source language are common and allowed
    - **Carrier phrase confirmation** — re-tests with a language-specific phrase prepended to distinguish false positives from real contamination

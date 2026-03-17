@@ -1,5 +1,6 @@
 """Main linter that ties all checks together and walks locale directories."""
 
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +16,8 @@ from po_lint.checks import (
     check_wrong_script,
 )
 from po_lint.detector import DEFAULT_MIN_DETECTION_LENGTH, is_wrong_language
+
+log = logging.getLogger(__name__)
 
 IGNORE_FILE = ".po-lint-ignore"
 
@@ -115,6 +118,7 @@ def lint_po_file(
     min_detection_length: int = DEFAULT_MIN_DETECTION_LENGTH,
     ignore_patterns: list[str] | None = None,
     ignore_rules: list[IgnoreRule] | None = None,
+    check_untranslated: bool = True,
 ) -> list[Issue]:
     """Lint a single .po file and return all issues found."""
     if locale is None:
@@ -141,6 +145,23 @@ def lint_po_file(
         ]
 
     issues = []
+
+    # Check for untranslated entries (skip source language)
+    if check_untranslated and locale != source_language:
+        for entry in catalog.untranslated_entries():
+            if entry.obsolete:
+                continue
+            issues.append(
+                Issue(
+                    file=str(po_file),
+                    line=entry.linenum,
+                    msgid=entry.msgid,
+                    msgstr="",
+                    issue_type=IssueType.UNTRANSLATED,
+                    severity=Severity.WARNING,
+                    message="Missing translation",
+                )
+            )
 
     for entry in catalog.translated_entries():
         msgid = entry.msgid
@@ -231,6 +252,47 @@ def _is_non_linguistic(text: str) -> bool:
     return len(cleaned) < 3
 
 
+def detect_source_language(locale_dir: Path) -> str | None:
+    """Auto-detect the source language from a locale directory.
+
+    A locale is the source language if:
+    - It has .po files with at least one entry
+    - ALL entries across ALL its .po files are untranslated (empty msgstr)
+    - Exactly one locale in the directory matches this condition
+
+    Returns the locale code if exactly one match, None otherwise.
+    """
+    # Collect per-locale stats: (total_entries, total_untranslated)
+    locale_stats: dict[str, tuple[int, int]] = {}
+
+    for po_file in sorted(locale_dir.rglob("*.po")):
+        locale = extract_locale_from_path(po_file)
+        if locale is None:
+            continue
+        try:
+            catalog = polib.pofile(str(po_file))
+        except (OSError, SyntaxError):
+            continue
+
+        total = len(catalog.translated_entries()) + len(catalog.untranslated_entries())
+        untranslated = len(catalog.untranslated_entries())
+
+        prev_total, prev_untranslated = locale_stats.get(locale, (0, 0))
+        locale_stats[locale] = (prev_total + total, prev_untranslated + untranslated)
+
+    # Find locales where every entry is untranslated (and there are entries)
+    candidates = [
+        loc for loc, (total, untranslated) in locale_stats.items()
+        if total > 0 and total == untranslated
+    ]
+
+    if len(candidates) == 1:
+        log.debug("Auto-detected source language: %s", candidates[0])
+        return candidates[0]
+
+    return None
+
+
 def lint_locale_dir(
     locale_dir: Path,
     languages: list[str] | None = None,
@@ -239,6 +301,7 @@ def lint_locale_dir(
     min_text_length: int = 3,
     min_detection_length: int = DEFAULT_MIN_DETECTION_LENGTH,
     ignore_patterns: list[str] | None = None,
+    check_untranslated: bool = True,
 ) -> list[Issue]:
     """Lint all .po files in a locale directory.
 
@@ -251,8 +314,14 @@ def lint_locale_dir(
         confidence_threshold: Minimum confidence to flag a wrong language.
         min_text_length: Minimum msgstr length to check.
         ignore_patterns: Regex patterns for msgid/msgstr to skip.
+        check_untranslated: If True, flag entries with empty msgstr.
     """
     ignore_rules = load_ignore_rules(locale_dir)
+
+    # Auto-detect source language as fallback
+    detected_source = detect_source_language(locale_dir)
+    effective_source = detected_source or source_language
+
     issues = []
 
     for po_file in sorted(locale_dir.rglob("*.po")):
@@ -265,12 +334,13 @@ def lint_locale_dir(
         file_issues = lint_po_file(
             po_file,
             locale=locale,
-            source_language=source_language,
+            source_language=effective_source,
             confidence_threshold=confidence_threshold,
             min_text_length=min_text_length,
             min_detection_length=min_detection_length,
             ignore_patterns=ignore_patterns,
             ignore_rules=ignore_rules,
+            check_untranslated=check_untranslated,
         )
         issues.extend(file_issues)
 
