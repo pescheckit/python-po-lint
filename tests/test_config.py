@@ -58,3 +58,15 @@ class TestLoadConfig:
         assert config.confidence_threshold == 0.7
         assert config.min_text_length == 5
         assert config.ignore_patterns == ["^TODO"]
+
+    def test_pyproject_with_disable(self, tmp_path):
+        (tmp_path / "pyproject.toml").write_text(
+            '[tool.po-lint]\n'
+            'disable = ["untranslated", "fuzzy"]\n'
+        )
+        config = load_config(tmp_path)
+        assert config.disable == ["untranslated", "fuzzy"]
+
+    def test_disable_defaults_to_empty(self):
+        config = Config()
+        assert config.disable == []

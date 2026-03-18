@@ -118,7 +118,7 @@ def lint_po_file(
     min_detection_length: int = DEFAULT_MIN_DETECTION_LENGTH,
     ignore_patterns: list[str] | None = None,
     ignore_rules: list[IgnoreRule] | None = None,
-    check_untranslated: bool = True,
+    disable: list[str] | None = None,
 ) -> list[Issue]:
     """Lint a single .po file and return all issues found."""
     if locale is None:
@@ -128,6 +128,7 @@ def lint_po_file(
 
     compiled_ignores = [re.compile(p) for p in (ignore_patterns or [])]
     ignore_rules = ignore_rules or []
+    disabled = set(disable or [])
 
     try:
         catalog = polib.pofile(str(po_file))
@@ -147,7 +148,7 @@ def lint_po_file(
     issues = []
 
     # Check for untranslated entries (skip source language)
-    if check_untranslated and locale != source_language:
+    if "untranslated" not in disabled and locale != source_language:
         for entry in catalog.untranslated_entries():
             if entry.obsolete:
                 continue
@@ -160,6 +161,36 @@ def lint_po_file(
                     issue_type=IssueType.UNTRANSLATED,
                     severity=Severity.WARNING,
                     message="Missing translation",
+                )
+            )
+
+    # Check for fuzzy entries
+    if "fuzzy" not in disabled:
+        for entry in catalog.fuzzy_entries():
+            issues.append(
+                Issue(
+                    file=str(po_file),
+                    line=entry.linenum,
+                    msgid=entry.msgid,
+                    msgstr=entry.msgstr,
+                    issue_type=IssueType.FUZZY,
+                    severity=Severity.ERROR,
+                    message="Fuzzy entry — needs review and removal of fuzzy flag",
+                )
+            )
+
+    # Check for obsolete entries
+    if "obsolete" not in disabled:
+        for entry in catalog.obsolete_entries():
+            issues.append(
+                Issue(
+                    file=str(po_file),
+                    line=entry.linenum,
+                    msgid=entry.msgid,
+                    msgstr=entry.msgstr,
+                    issue_type=IssueType.OBSOLETE,
+                    severity=Severity.ERROR,
+                    message="Obsolete entry — should be removed",
                 )
             )
 
@@ -188,49 +219,53 @@ def lint_po_file(
             continue
 
         # 1. Wrong script check (fast, no model needed)
-        issue = check_wrong_script(msgstr, locale)
-        if issue:
-            issue.file = str(po_file)
-            issue.line = entry.linenum
-            issue.msgid = msgid
-            issues.append(issue)
-            continue  # If wrong script, skip language detection (it would also flag)
+        if "wrong_script" not in disabled:
+            issue = check_wrong_script(msgstr, locale)
+            if issue:
+                issue.file = str(po_file)
+                issue.line = entry.linenum
+                issue.msgid = msgid
+                issues.append(issue)
+                continue  # If wrong script, skip language detection (it would also flag)
 
         # 2. Garbled text check
-        issue = check_garbled_text(msgstr)
-        if issue:
-            issue.file = str(po_file)
-            issue.line = entry.linenum
-            issue.msgid = msgid
-            issues.append(issue)
-            continue
+        if "garbled_text" not in disabled:
+            issue = check_garbled_text(msgstr)
+            if issue:
+                issue.file = str(po_file)
+                issue.line = entry.linenum
+                issue.msgid = msgid
+                issues.append(issue)
+                continue
 
         # 3. Shifted entry check
-        issue = check_shifted_entry(msgid, msgstr)
-        if issue:
-            issue.file = str(po_file)
-            issue.line = entry.linenum
-            issues.append(issue)
+        if "shifted_entry" not in disabled:
+            issue = check_shifted_entry(msgid, msgstr)
+            if issue:
+                issue.file = str(po_file)
+                issue.line = entry.linenum
+                issues.append(issue)
 
         # 4. Wrong language check (uses fastText)
-        is_wrong, detected_lang, confidence = is_wrong_language(
-            msgstr, locale, confidence_threshold, source_language, msgid=msgid,
-            min_detection_length=min_detection_length,
-        )
-        if is_wrong:
-            issues.append(
-                Issue(
-                    file=str(po_file),
-                    line=entry.linenum,
-                    msgid=msgid,
-                    msgstr=msgstr,
-                    issue_type=IssueType.WRONG_LANGUAGE,
-                    severity=Severity.ERROR,
-                    message=f"Expected {locale}, detected {detected_lang} (confidence: {confidence:.0%})",
-                    detected_lang=detected_lang,
-                    confidence=confidence,
-                )
+        if "wrong_language" not in disabled:
+            is_wrong, detected_lang, confidence = is_wrong_language(
+                msgstr, locale, confidence_threshold, source_language, msgid=msgid,
+                min_detection_length=min_detection_length,
             )
+            if is_wrong:
+                issues.append(
+                    Issue(
+                        file=str(po_file),
+                        line=entry.linenum,
+                        msgid=msgid,
+                        msgstr=msgstr,
+                        issue_type=IssueType.WRONG_LANGUAGE,
+                        severity=Severity.ERROR,
+                        message=f"Expected {locale}, detected {detected_lang} (confidence: {confidence:.0%})",
+                        detected_lang=detected_lang,
+                        confidence=confidence,
+                    )
+                )
 
     return issues
 
@@ -301,7 +336,7 @@ def lint_locale_dir(
     min_text_length: int = 3,
     min_detection_length: int = DEFAULT_MIN_DETECTION_LENGTH,
     ignore_patterns: list[str] | None = None,
-    check_untranslated: bool = True,
+    disable: list[str] | None = None,
 ) -> list[Issue]:
     """Lint all .po files in a locale directory.
 
@@ -314,7 +349,7 @@ def lint_locale_dir(
         confidence_threshold: Minimum confidence to flag a wrong language.
         min_text_length: Minimum msgstr length to check.
         ignore_patterns: Regex patterns for msgid/msgstr to skip.
-        check_untranslated: If True, flag entries with empty msgstr.
+        disable: List of check names to disable (e.g. ["untranslated", "fuzzy"]).
     """
     ignore_rules = load_ignore_rules(locale_dir)
 
@@ -340,7 +375,7 @@ def lint_locale_dir(
             min_detection_length=min_detection_length,
             ignore_patterns=ignore_patterns,
             ignore_rules=ignore_rules,
-            check_untranslated=check_untranslated,
+            disable=disable,
         )
         issues.extend(file_issues)
 

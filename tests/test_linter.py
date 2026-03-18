@@ -2,11 +2,13 @@
 
 from pathlib import Path
 
+from po_lint.checks import IssueType
 from po_lint.linter import (
     IgnoreRule,
     _is_ignored,
     _is_non_linguistic,
     extract_locale_from_path,
+    lint_po_file,
     load_ignore_rules,
 )
 
@@ -134,3 +136,50 @@ class TestIsIgnored:
         """A rule without context should match entries with or without context."""
         assert _is_ignored("Cancel", "some_ctx", "nl", self.rules) is True
         assert _is_ignored("Cancel", None, "nl", self.rules) is True
+
+
+DA_FIXTURE = FIXTURES_DIR / "da" / "LC_MESSAGES" / "django.po"
+
+
+class TestFuzzyDetection:
+    def test_fuzzy_entries_are_errors(self):
+        issues = lint_po_file(DA_FIXTURE, locale="da")
+        fuzzy_issues = [i for i in issues if i.issue_type == IssueType.FUZZY]
+        assert len(fuzzy_issues) == 1
+        assert fuzzy_issues[0].msgid == "Save changes"
+
+    def test_fuzzy_severity_is_error(self):
+        issues = lint_po_file(DA_FIXTURE, locale="da")
+        fuzzy_issues = [i for i in issues if i.issue_type == IssueType.FUZZY]
+        assert all(i.severity.value == "error" for i in fuzzy_issues)
+
+
+class TestObsoleteDetection:
+    def test_obsolete_entries_are_errors(self):
+        issues = lint_po_file(DA_FIXTURE, locale="da")
+        obsolete_issues = [i for i in issues if i.issue_type == IssueType.OBSOLETE]
+        assert len(obsolete_issues) == 1
+        assert obsolete_issues[0].msgid == "Old removed string"
+
+    def test_obsolete_severity_is_error(self):
+        issues = lint_po_file(DA_FIXTURE, locale="da")
+        obsolete_issues = [i for i in issues if i.issue_type == IssueType.OBSOLETE]
+        assert all(i.severity.value == "error" for i in obsolete_issues)
+
+
+class TestDisable:
+    def test_disable_fuzzy(self):
+        issues = lint_po_file(DA_FIXTURE, locale="da", disable=["fuzzy"])
+        assert not any(i.issue_type == IssueType.FUZZY for i in issues)
+
+    def test_disable_obsolete(self):
+        issues = lint_po_file(DA_FIXTURE, locale="da", disable=["obsolete"])
+        assert not any(i.issue_type == IssueType.OBSOLETE for i in issues)
+
+    def test_disable_multiple(self):
+        issues = lint_po_file(DA_FIXTURE, locale="da", disable=["fuzzy", "obsolete"])
+        assert not any(i.issue_type in (IssueType.FUZZY, IssueType.OBSOLETE) for i in issues)
+
+    def test_disable_untranslated(self):
+        issues = lint_po_file(DA_FIXTURE, locale="da", disable=["untranslated"])
+        assert not any(i.issue_type == IssueType.UNTRANSLATED for i in issues)

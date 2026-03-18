@@ -1,0 +1,20 @@
+# Danish translations — includes fuzzy and obsolete entries for testing
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: da\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Welcome"
+msgstr "Velkommen"
+
+#, fuzzy
+#| msgid "Save"
+msgid "Save changes"
+msgstr "Gem"
+
+msgid "Cancel"
+msgstr "Annuller"
+
+#~ msgid "Old removed string"
+#~ msgstr "Gammel fjernet streng"

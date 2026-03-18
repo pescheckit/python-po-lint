@@ -17,6 +17,8 @@ class IssueType(Enum):
     SHIFTED_ENTRY = "shifted_entry"
     GARBLED_TEXT = "garbled_text"
     UNTRANSLATED = "untranslated"
+    FUZZY = "fuzzy"
+    OBSOLETE = "obsolete"
 
 
 @dataclass

@@ -14,7 +14,8 @@ from po_lint.linter import lint_locale_dir
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="po-lint",
-        description="Lint .po translation files for contamination, wrong languages, shifts, and garbled text.",
+        description="Lint .po translation files for contamination, wrong languages, shifts, and garbled text. "
+                    "Place a .po-lint-ignore file in the locale/ directory to suppress false positives.",
     )
     parser.add_argument(
         "paths",
@@ -52,10 +53,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Minimum cleaned text length for language detection (default: 30).",
     )
     parser.add_argument(
-        "--check-untranslated",
-        action=argparse.BooleanOptionalAction,
+        "--disable",
+        nargs="*",
         default=None,
-        help="Check for untranslated entries (default: true). Use --no-check-untranslated to disable.",
+        help="Disable specific checks (e.g. --disable untranslated fuzzy). "
+             "Valid checks: wrong_language, wrong_script, shifted_entry, garbled_text, untranslated, fuzzy, obsolete.",
     )
     parser.add_argument(
         "--compact-model",
@@ -92,10 +94,7 @@ def main(argv: list[str] | None = None) -> int:
         args.min_detection_length if args.min_detection_length is not None
         else config.min_detection_length
     )
-    check_untranslated = (
-        args.check_untranslated if args.check_untranslated is not None
-        else config.check_untranslated
-    )
+    disable = args.disable if args.disable is not None else config.disable
 
     # Resolve locale directories
     if args.paths:
@@ -127,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
             min_text_length=config.min_text_length,
             min_detection_length=min_detection_length,
             ignore_patterns=config.ignore_patterns,
-            check_untranslated=check_untranslated,
+            disable=disable,
         )
         all_issues.extend(issues)
 
