@@ -2,11 +2,11 @@
 
 Lint `.po` translation files for contamination, wrong languages, missing translations, shifts, and garbled text.
 
-Uses [fastText](https://fasttext.cc/) language identification with carrier phrase confirmation and confused language score merging for high accuracy with zero false positives.
+Uses [lingua](https://github.com/pemistahl/lingua-py) language identification with carrier phrase confirmation and confused language score merging for high accuracy with zero false positives.
 
 ## Features
 
-- **Wrong language detection** — fastText-based with top-5 scoring, confused language merging, and carrier phrase confirmation
+- **Wrong language detection** — lingua-based confidence scoring with confused language merging and carrier phrase confirmation
 - **Wrong script detection** — catches Cyrillic in a Dutch file, Arabic in French, Latin in Chinese, etc.
 - **Distinctive character detection** — catches Russian-specific chars in Ukrainian and vice versa
 - **Fuzzy entry detection** — flags entries with the fuzzy flag that need review
@@ -29,7 +29,7 @@ Or with uv:
 uv add python-po-lint
 ```
 
-The fastText language model (~126MB) is downloaded automatically on first run to `~/.cache/po-lint/`.
+Language models ship inside the lingua wheel; nothing is downloaded at runtime.
 
 ## Usage
 
@@ -43,7 +43,7 @@ po-lint
 # Only check specific languages
 po-lint locale/ --languages fr de nl
 
-# Use compact model (917KB, less accurate)
+# Use lingua's low accuracy mode (faster, less reliable on short text)
 po-lint locale/ --compact-model
 
 # JSON output
@@ -89,7 +89,7 @@ min_detection_length = 30
 # Skip entries with msgstr shorter than this
 min_text_length = 3
 
-# Use compact fastText model instead of full
+# Use lingua's low accuracy mode instead of the default high accuracy mode
 compact_model = false
 
 # Disable specific checks
@@ -127,7 +127,7 @@ screening status::Some msgid
 5. **Distinctive character check** — detects cross-contamination between languages sharing a script (e.g. Russian/Ukrainian).
 6. **Garbled text check** — flags corrupted unicode.
 7. **Shifted entry check** — flags suspiciously short translations for long source strings.
-8. **Wrong language check** — uses fastText with three layers of false positive prevention:
+8. **Wrong language check** — uses lingua with three layers of false positive prevention:
    - **Confused language score merging** — redistributes scores from commonly confused languages (e.g. Danish/Norwegian, Portuguese/Spanish)
    - **Source language allowance** — borrowed words from the source language are common and allowed
    - **Carrier phrase confirmation** — re-tests with a language-specific phrase prepended to distinguish false positives from real contamination

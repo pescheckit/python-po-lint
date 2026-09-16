@@ -1,33 +1,24 @@
-"""Language detection using fastText for .po file linting."""
+"""Language detection using lingua for .po file linting."""
 
 import os
 import re
-import urllib.request
-from pathlib import Path
 
-import fasttext
-
-# Suppress fastText warnings about "\n" in input
-fasttext.FastText.eprint = lambda x: None
+from lingua import Language, LanguageDetectorBuilder
 
 # Default minimum cleaned text length to attempt language detection.
 # Short strings are unreliable — loan words, cognates, and brand names
 # make detection impossible for anything under ~30 characters.
 DEFAULT_MIN_DETECTION_LENGTH = 30
 
-FULL_MODEL_URL = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin"
-COMPACT_MODEL_URL = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz"
-MODEL_DIR = Path(os.environ.get("PO_LINT_MODEL_DIR", Path.home() / ".cache" / "po-lint"))
-
 # Common aliases: locale directory names that don't match the ISO 639-1 code
-# used by fastText. Only edge cases go here — most codes work as-is.
+# used internally. Only edge cases go here — most codes work as-is.
 LOCALE_ALIASES = {
     "zh_Hans": "zh",
     "zh_Hant": "zh",
     "zh_CN": "zh",
     "zh_TW": "zh",
-    "nb": "no",       # Norwegian Bokmål → fastText uses "no"
-    "nn": "no",       # Norwegian Nynorsk → fastText uses "no"
+    "nb": "no",       # Norwegian Bokmål → folded into macrolanguage "no"
+    "nn": "no",       # Norwegian Nynorsk → folded into macrolanguage "no"
     "pt_BR": "pt",
     "pt_PT": "pt",
     "es_AR": "es",
@@ -40,8 +31,13 @@ LOCALE_ALIASES = {
     "sr_Cyrl": "sr",
 }
 
+# lingua distinguishes Bokmål and Nynorsk but has no Norwegian macrolanguage,
+# while locale directories use "no". Fold both into "no" on the detection side
+# so expected and detected codes live in the same space.
+_DETECTED_FOLDS = {"nb": "no", "nn": "no"}
+
 # Carrier phrases per language — used for second-pass confirmation.
-# When fastText flags a wrong language, we re-test with a carrier phrase
+# When the detector flags a wrong language, we re-test with a carrier phrase
 # prepended. If the originally detected language drops significantly (>60%)
 # and the expected language rises significantly (>20%), the original detection
 # was likely a false positive on ambiguous text.
@@ -94,7 +90,7 @@ CARRIER_PHRASES = {
     "zh": "用中文来说",
 }
 
-# Confused language merges: when fastText detects a language that is commonly
+# Confused language merges: when the detector reports a language that is commonly
 # confused with the expected language, merge its score into the expected language's
 # score. This is directional — e.g. Swedish text can be confused as German (sv merges
 # de), but German text is rarely confused as Swedish (de does NOT merge sv).
@@ -117,9 +113,11 @@ CONFUSED_MERGES: dict[str, set[str]] = {
     # Turkic languages
     "tr": {"az"},
     "az": {"tr"},
-    # Cyrillic languages — shared script and vocabulary
-    "uk": {"ru"},
-    "ru": {"uk"},
+    # Cyrillic languages — shared script and vocabulary. Ukrainian text with
+    # dotted і reads as Kazakh to lingua (Kazakh Cyrillic also has і), and
+    # short Russian phrases read as Bulgarian; both merges are directional.
+    "uk": {"ru", "kk"},
+    "ru": {"uk", "bg"},
     "bg": {"mk"},
     "mk": {"bg"},
     # Indic languages — shared Devanagari script
@@ -132,50 +130,46 @@ CONFUSED_MERGES: dict[str, set[str]] = {
 }
 
 
+def _lang_code(language: Language) -> str:
+    code = language.iso_code_639_1.name.lower()
+    return _DETECTED_FOLDS.get(code, code)
+
+
+SUPPORTED_CODES = frozenset(_lang_code(lang) for lang in Language.all_spoken_ones())
+
+
 def _normalize_locale(locale: str) -> str:
-    """Normalize a locale directory name to a fastText-compatible ISO code."""
+    """Normalize a locale directory name to a detector-compatible ISO code."""
     return LOCALE_ALIASES.get(locale, locale)
 
 
-def _use_compact_model() -> bool:
-    """Check if compact model is requested via environment variable."""
+def _use_low_accuracy_mode() -> bool:
+    """Check if low accuracy mode is requested via environment variable."""
     return os.environ.get("PO_LINT_COMPACT_MODEL", "").lower() in ("1", "true", "yes")
 
 
-def ensure_model(compact: bool = False) -> Path:
-    """Download the fastText language ID model if not already cached."""
-    if compact or _use_compact_model():
-        url = COMPACT_MODEL_URL
-        path = MODEL_DIR / "lid.176.ftz"
-    else:
-        url = FULL_MODEL_URL
-        path = MODEL_DIR / "lid.176.bin"
-
-    if path.exists():
-        return path
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    model_type = "compact" if "ftz" in path.name else "full"
-    print(f"Downloading fastText language model ({model_type}) to {path}...")
-    urllib.request.urlretrieve(url, path)
-    return path
-
-
-_ft_model = None
+_detector = None
 
 
 def init_model(compact: bool = False) -> None:
-    """Initialize the fastText model. Call before linting to select model variant."""
-    global _ft_model
-    model_path = ensure_model(compact)
-    _ft_model = fasttext.load_model(str(model_path))
+    """Initialize the lingua detector. Call before linting to select the accuracy mode.
+
+    ``compact`` maps to lingua's low accuracy mode: smaller models, faster,
+    less reliable on short text.
+    """
+    global _detector
+    builder = LanguageDetectorBuilder.from_all_spoken_languages()
+    if compact or _use_low_accuracy_mode():
+        builder = builder.with_low_accuracy_mode()
+    _detector = builder.with_preloaded_language_models().build()
 
 
-def get_ft_model() -> fasttext.FastText._FastText:
-    """Load the fastText model (singleton). Auto-initializes with default if not yet loaded."""
-    global _ft_model
-    if _ft_model is None:
+def _get_detector():
+    """Return the lingua detector (singleton). Auto-initializes with defaults if not yet loaded."""
+    global _detector
+    if _detector is None:
         init_model()
-    return _ft_model
+    return _detector
 
 
 def clean_text(text: str) -> str:
@@ -188,8 +182,21 @@ def clean_text(text: str) -> str:
     return text
 
 
+def _detect_scores(text: str) -> dict[str, float]:
+    """Return the detector's confidence distribution as {lang_code: confidence}.
+
+    Bokmål and Nynorsk confidences are folded into "no", so the mass of both
+    variants counts toward the Norwegian macrolanguage.
+    """
+    scores: dict[str, float] = {}
+    for entry in _get_detector().compute_language_confidence_values(text):
+        code = _lang_code(entry.language)
+        scores[code] = scores.get(code, 0.0) + entry.value
+    return scores
+
+
 def detect_language(text: str, min_detection_length: int = DEFAULT_MIN_DETECTION_LENGTH) -> tuple[str, float]:
-    """Detect language of text using fastText.
+    """Detect language of text using lingua.
 
     Returns (lang_code, confidence). Returns ("unknown", 0.0) for text
     shorter than min_detection_length after cleaning.
@@ -198,25 +205,11 @@ def detect_language(text: str, min_detection_length: int = DEFAULT_MIN_DETECTION
     if len(cleaned) < min_detection_length:
         return ("unknown", 0.0)
 
-    return _detect_fasttext(cleaned)
-
-
-def _detect_fasttext(text: str, k: int = 1) -> tuple[str, float] | dict[str, float]:
-    """Detect language using fastText.
-
-    With k=1, returns (lang, confidence).
-    With k>1, returns a dict of {lang: confidence} for the top-k predictions.
-    """
-    model = get_ft_model()
-    predictions = model.predict(text.replace("\n", " "), k=k)
-    if k == 1:
-        label = predictions[0][0].replace("__label__", "")
-        confidence = predictions[1][0]
-        return (label, confidence)
-    return {
-        label.replace("__label__", ""): conf
-        for label, conf in zip(predictions[0], predictions[1])
-    }
+    scores = _detect_scores(cleaned)
+    if not scores:
+        return ("unknown", 0.0)
+    detected = max(scores, key=scores.get)
+    return (detected, scores[detected])
 
 
 def _merge_confused_scores(
@@ -224,7 +217,7 @@ def _merge_confused_scores(
 ) -> dict[str, float]:
     """Merge scores from languages commonly confused with the expected language.
 
-    When fastText splits its confidence between the expected language and
+    When the detector splits its confidence between the expected language and
     languages it commonly confuses with it, this merges those scores together.
     For example, Swedish text might get de:63% + sv:12% — if sv has de in its
     merge set, the adjusted score becomes sv:75%.
@@ -271,8 +264,12 @@ def is_wrong_language(
 
     expected_code = _normalize_locale(expected_lang)
 
-    # Get top-5 scores and merge confused language scores
-    scores = _detect_fasttext(cleaned, k=5)
+    # A locale lingua has no model for can never match itself — skip rather
+    # than flag every entry.
+    if expected_code not in SUPPORTED_CODES:
+        return (False, "unknown", 0.0)
+
+    scores = _detect_scores(cleaned)
     adjusted = _merge_confused_scores(scores, expected_code)
     detected_lang = max(adjusted, key=adjusted.get)
     confidence = scores.get(detected_lang, adjusted[detected_lang])
@@ -301,7 +298,7 @@ def is_wrong_language(
     if carrier:
         bare_det_conf = scores.get(detected_lang, 0.0)
         bare_exp_conf = scores.get(expected_code, 0.0)
-        boosted_scores = _detect_fasttext(f"{carrier} {cleaned}", k=5)
+        boosted_scores = _detect_scores(f"{carrier} {cleaned}")
         boosted_det_conf = boosted_scores.get(detected_lang, 0.0)
         boosted_exp_conf = boosted_scores.get(expected_code, 0.0)
 

@@ -62,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--compact-model",
         action="store_true",
-        help="Use the compact fastText model (917KB, less accurate) instead of the full model (126MB).",
+        help="Use lingua's low accuracy mode (faster, less reliable on short text).",
     )
     parser.add_argument(
         "--format",
