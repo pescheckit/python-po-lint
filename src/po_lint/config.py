@@ -22,7 +22,8 @@ class Config:
     packages: list[str] = field(default_factory=list)
     languages: list[str] = field(default_factory=list)
     source_language: str = "en"
-    confidence_threshold: float = 0.5
+    confidence_threshold: float = 0.7
+    expected_confidence_max: float = 0.05
     min_text_length: int = 3
     min_detection_length: int = 30
     ignore_patterns: list[str] = field(default_factory=list)
@@ -87,7 +88,8 @@ def load_config(project_dir: Path | None = None) -> Config:
         packages=tool_config.get("packages", []),
         languages=tool_config.get("languages", []),
         source_language=tool_config.get("source_language", "en"),
-        confidence_threshold=tool_config.get("confidence_threshold", 0.5),
+        confidence_threshold=tool_config.get("confidence_threshold", 0.7),
+        expected_confidence_max=tool_config.get("expected_confidence_max", 0.05),
         min_text_length=tool_config.get("min_text_length", 3),
         min_detection_length=tool_config.get("min_detection_length", 30),
         ignore_patterns=tool_config.get("ignore_patterns", []),

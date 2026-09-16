@@ -8,7 +8,7 @@ from pathlib import Path
 from po_lint.checks import Severity
 from po_lint.config import load_config
 from po_lint.detector import init_model
-from po_lint.linter import lint_locale_dir
+from po_lint.linter import extract_locale_from_path, lint_locale_dir
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -33,7 +33,13 @@ def main(argv: list[str] | None = None) -> int:
         "--confidence",
         type=float,
         default=None,
-        help="Minimum confidence threshold for wrong language detection (default: 0.5).",
+        help="Minimum top-language confidence to flag a wrong language (default: 0.7).",
+    )
+    parser.add_argument(
+        "--expected-confidence-max",
+        type=float,
+        default=None,
+        help="Flag only if the expected language's own confidence is below this (default: 0.05).",
     )
     parser.add_argument(
         "--languages",
@@ -95,6 +101,10 @@ def main(argv: list[str] | None = None) -> int:
         else config.min_detection_length
     )
     disable = args.disable if args.disable is not None else config.disable
+    expected_confidence_max = (
+        args.expected_confidence_max if args.expected_confidence_max is not None
+        else config.expected_confidence_max
+    )
 
     # Resolve locale directories
     if args.paths:
@@ -109,9 +119,15 @@ def main(argv: list[str] | None = None) -> int:
                   file=sys.stderr)
             return 2
 
-    # Initialize model
+    # Restrict the detector to the languages that occur in the linted dirs
+    codes = {source_language}
+    for locale_dir in locale_dirs:
+        for po_file in locale_dir.rglob("*.po"):
+            locale = extract_locale_from_path(po_file)
+            if locale:
+                codes.add(locale)
     compact = args.compact_model or config.compact_model
-    init_model(compact=compact)
+    init_model(languages=codes, compact=compact)
 
     # Run linting
     all_issues = []
@@ -127,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
             min_detection_length=min_detection_length,
             ignore_patterns=config.ignore_patterns,
             disable=disable,
+            expected_confidence_max=expected_confidence_max,
         )
         all_issues.extend(issues)
 

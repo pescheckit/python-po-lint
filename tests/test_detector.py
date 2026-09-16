@@ -2,16 +2,27 @@
 
 from pathlib import Path
 
-from po_lint.checks import IssueType
+import pytest
+
+from po_lint.checks import IssueType, check_wrong_script
 from po_lint.detector import (
     _normalize_locale,
     clean_text,
     detect_language,
+    init_model,
     is_wrong_language,
 )
 from po_lint.linter import lint_locale_dir, lint_po_file
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "locale"
+
+# The locale set a real deployment would restrict the detector to
+LOCALES = ["ar", "da", "de", "en", "es", "fr", "it", "nb", "nl", "pt", "ru", "sv", "uk", "zh"]
+
+
+@pytest.fixture(autouse=True, scope="module")
+def restricted_detector():
+    init_model(languages=LOCALES)
 
 
 class TestNormalizeLocale:
@@ -50,7 +61,7 @@ class TestCleanText:
 
 
 class TestDetectLanguage:
-    """Tests that exercise the actual fastText model."""
+    """Tests that exercise the actual lingua models."""
 
     def test_long_dutch(self):
         lang, conf = detect_language("Dit is een uitgebreide test van de Nederlandse taaldetectie")
@@ -88,18 +99,19 @@ class TestIsWrongLanguage:
         )
         assert is_wrong is False
 
-    def test_russian_in_dutch_flagged(self):
-        is_wrong, detected, _ = is_wrong_language(
-            "Это комплексный тест определения русского языка", "nl"
-        )
-        assert is_wrong is True
-        assert detected == "ru"
+    def test_russian_in_dutch_owned_by_wrong_script(self):
+        """Fully foreign-script text is stripped by the script filter here;
+        check_wrong_script owns that case and must catch it."""
+        text = "Это комплексный тест определения русского языка"
+        is_wrong, _, _ = is_wrong_language(text, "nl")
+        assert is_wrong is False
+        assert check_wrong_script(text, "nl") is not None
 
-    def test_chinese_in_french_flagged(self):
-        is_wrong, _, _ = is_wrong_language(
-            "这是中文文本不应该出现在法语翻译中，这是一个测试用的较长文本", "fr"
-        )
-        assert is_wrong is True
+    def test_chinese_in_french_owned_by_wrong_script(self):
+        text = "这是中文文本不应该出现在法语翻译中，这是一个测试用的较长文本"
+        is_wrong, _, _ = is_wrong_language(text, "fr")
+        assert is_wrong is False
+        assert check_wrong_script(text, "fr") is not None
 
     def test_alias_zh_hans(self):
         is_wrong, _, _ = is_wrong_language(
@@ -118,12 +130,28 @@ class TestIsWrongLanguage:
         is_wrong, _, _ = is_wrong_language("Oui, bien sûr", "es")
         assert is_wrong is False
 
-    def test_confused_pairs_not_flagged(self):
-        """Norwegian/Danish are commonly confused — shouldn't be flagged."""
+    def test_sibling_language_contamination_flagged(self):
+        """Spanish in an Italian file — sibling languages must stay detectable."""
+        is_wrong, detected, _ = is_wrong_language(
+            "Su fecha de nacimiento no coincide con el documento que ha subido", "it"
+        )
+        assert is_wrong is True
+        assert detected == "es"
+
+    def test_mixed_script_brand_terms_not_flagged(self):
+        """Latin product nouns inside a Cyrillic locale are stripped, not detected."""
         is_wrong, _, _ = is_wrong_language(
-            "Dette er en omfattende test av norsk språkgjenkjenning i teksten", "da"
+            "Скопіюйте Application ID, Tenant ID та Client Secret вище", "uk"
         )
         assert is_wrong is False
+
+    def test_unsupported_locale_skipped(self):
+        """A locale lingua has no model for is skipped instead of always flagging."""
+        is_wrong, detected, _ = is_wrong_language(
+            "This text is long enough to be detected as some language", "fy"
+        )
+        assert is_wrong is False
+        assert detected == "unknown"
 
     def test_source_language_allowed(self):
         """English words in non-English files should not be flagged (source_language default)."""

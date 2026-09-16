@@ -6,7 +6,7 @@ Uses [lingua](https://github.com/pemistahl/lingua-py) language identification wi
 
 ## Features
 
-- **Wrong language detection** — lingua-based confidence scoring with confused language merging and carrier phrase confirmation
+- **Wrong language detection** — lingua-based, restricted to the languages in your catalogs, with a relative confidence rule and script filtering
 - **Wrong script detection** — catches Cyrillic in a Dutch file, Arabic in French, Latin in Chinese, etc.
 - **Distinctive character detection** — catches Russian-specific chars in Ukrainian and vice versa
 - **Fuzzy entry detection** — flags entries with the fuzzy flag that need review
@@ -80,8 +80,11 @@ languages = []
 # Source language — detections matching this are allowed (borrowed words)
 source_language = "en"
 
-# Minimum confidence to flag wrong language (0.0 - 1.0)
-confidence_threshold = 0.5
+# Flag only when another language tops this confidence (0.0 - 1.0)
+confidence_threshold = 0.7
+
+# ...while the expected language's own confidence is below this
+expected_confidence_max = 0.05
 
 # Minimum cleaned text length for language detection
 min_detection_length = 30
@@ -128,9 +131,9 @@ screening status::Some msgid
 6. **Garbled text check** — flags corrupted unicode.
 7. **Shifted entry check** — flags suspiciously short translations for long source strings.
 8. **Wrong language check** — uses lingua with three layers of false positive prevention:
-   - **Confused language score merging** — redistributes scores from commonly confused languages (e.g. Danish/Norwegian, Portuguese/Spanish)
-   - **Source language allowance** — borrowed words from the source language are common and allowed
-   - **Carrier phrase confirmation** — re-tests with a language-specific phrase prepended to distinguish false positives from real contamination
+   - **Restricted candidate set** — the detector only considers the languages present in the linted catalogs plus the source language, so text can't be attributed to exotic lookalikes
+   - **Script filtering** — tokens in a script the locale doesn't use (quoted product names, brand terms) are stripped before detection instead of drowning out the native text
+   - **Relative confidence rule** — flags only when the expected language scores below `expected_confidence_max` while another language tops `confidence_threshold`, i.e. the text is clearly NOT the expected language, not merely closer to a sibling
 
 ## License
 
