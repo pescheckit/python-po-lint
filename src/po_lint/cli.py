@@ -39,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
         "--expected-confidence-max",
         type=float,
         default=None,
-        help="Flag only if the expected language's own confidence is below this (default: 0.05).",
+        help="Flag only if the expected language's own confidence is below this (default: 0.1).",
     )
     parser.add_argument(
         "--languages",

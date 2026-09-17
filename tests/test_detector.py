@@ -145,6 +145,39 @@ class TestIsWrongLanguage:
         )
         assert is_wrong is False
 
+    def test_loan_word_heavy_string_not_flagged(self):
+        """A translation dominated by English tokens carried over from the
+        msgid is judged on its native remainder, or skipped if too little
+        remains — never flagged."""
+        is_wrong, _, _ = is_wrong_language(
+            "Configureer de webhook endpoint settings via het dashboard token menu",
+            "nl",
+            msgid="Configure the webhook endpoint settings via the dashboard token menu",
+        )
+        assert is_wrong is False
+
+    def test_quoted_foreign_term_from_msgid_not_flagged(self):
+        """A foreign term quoted in both msgid and translation (law names,
+        product names) must not drag the detection to its own language."""
+        is_wrong, _, _ = is_wrong_language(
+            "Le dépistage ne peut être utilisé que sous la 'Wet bijzondere "
+            "omstandigheden grootstedelijke problematiek'",
+            "fr",
+            msgid="The screening may be used only under 'Wet bijzondere "
+                  "omstandigheden grootstedelijke problematiek'",
+        )
+        assert is_wrong is False
+
+    def test_contamination_not_rescued_by_msgid(self):
+        """Real contamination shares no tokens with the msgid and stays caught."""
+        is_wrong, detected, _ = is_wrong_language(
+            "Su fecha de nacimiento no coincide con el documento que ha subido",
+            "it",
+            msgid="Your date of birth does not match the uploaded document",
+        )
+        assert is_wrong is True
+        assert detected == "es"
+
     def test_unsupported_locale_skipped(self):
         """A locale lingua has no model for is skipped instead of always flagging."""
         is_wrong, detected, _ = is_wrong_language(

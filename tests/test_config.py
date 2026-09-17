@@ -14,7 +14,7 @@ class TestConfig:
         assert config.paths == [Path("locale")]
         assert config.packages == []
         assert config.confidence_threshold == 0.7
-        assert config.expected_confidence_max == 0.05
+        assert config.expected_confidence_max == 0.1
 
     def test_resolve_locale_dirs(self):
         config = Config(paths=[Path("locale")])

@@ -84,7 +84,7 @@ source_language = "en"
 confidence_threshold = 0.7
 
 # ...while the expected language's own confidence is below this
-expected_confidence_max = 0.05
+expected_confidence_max = 0.1
 
 # Minimum cleaned text length for language detection
 min_detection_length = 30
@@ -130,9 +130,10 @@ screening status::Some msgid
 5. **Distinctive character check** — detects cross-contamination between languages sharing a script (e.g. Russian/Ukrainian).
 6. **Garbled text check** — flags corrupted unicode.
 7. **Shifted entry check** — flags suspiciously short translations for long source strings.
-8. **Wrong language check** — uses lingua with three layers of false positive prevention:
+8. **Wrong language check** — uses lingua with four layers of false positive prevention:
    - **Restricted candidate set** — the detector only considers the languages present in the linted catalogs plus the source language, so text can't be attributed to exotic lookalikes
-   - **Script filtering** — tokens in a script the locale doesn't use (quoted product names, brand terms) are stripped before detection instead of drowning out the native text
+   - **Source token stripping** — msgstr tokens copied verbatim from the msgid (loan words, product nouns, quoted terms) are dropped before detection; a translation that is mostly untranslatable jargon is skipped rather than misjudged
+   - **Script filtering** — tokens in a script the locale doesn't use are stripped before detection instead of drowning out the native text
    - **Relative confidence rule** — flags only when the expected language scores below `expected_confidence_max` while another language tops `confidence_threshold`, i.e. the text is clearly NOT the expected language, not merely closer to a sibling
 
 ## License

@@ -29,7 +29,9 @@ DEFAULT_MIN_DETECTION_LENGTH = 30
 # Flag only when another language tops this confidence...
 DEFAULT_TOP_CONFIDENCE_MIN = 0.7
 # ...while the expected language scores below this.
-DEFAULT_EXPECTED_CONFIDENCE_MAX = 0.05
+DEFAULT_EXPECTED_CONFIDENCE_MAX = 0.1
+
+_WORD_RE = re.compile(r"[^\W\d_]+")
 
 # Common aliases: locale directory names that don't match the ISO 639-1 code
 # used internally. Only edge cases go here — most codes work as-is.
@@ -150,6 +152,30 @@ def clean_text(text: str) -> str:
     return text
 
 
+def _strip_source_tokens(text: str, msgid: str) -> str:
+    """Drop msgstr tokens whose words all appear verbatim in the msgid.
+
+    A word carried over unchanged from the source string is a loan word,
+    product noun, or quoted term by definition ("Application ID", "webhook",
+    a quoted Dutch law name) — it says nothing about the translation's
+    language, but enough of them drown out the actual translated words.
+    Genuine contamination shares almost no tokens with the source and
+    passes through untouched.
+    """
+    if not msgid:
+        return text
+    source_words = {w.lower() for w in _WORD_RE.findall(msgid)}
+    if not source_words:
+        return text
+    kept = []
+    for token in text.split():
+        words = _WORD_RE.findall(token)
+        if words and all(w.lower() in source_words for w in words):
+            continue
+        kept.append(token)
+    return " ".join(kept)
+
+
 def _script_filter(text: str, expected_lang: str, expected_code: str) -> str:
     """Drop tokens written in a script the expected locale doesn't use.
 
@@ -229,7 +255,8 @@ def is_wrong_language(
         source_language: The source language of the .po file (default: "en").
             Detections matching the source language are allowed, since borrowed
             words from the source language are common in translations.
-        msgid: The source text (currently unused, reserved for future use).
+        msgid: The source text. Tokens copied verbatim from it (loan words,
+            product nouns, quoted terms) are stripped before detection.
         min_detection_length: Minimum cleaned text length to attempt detection.
         expected_confidence_max: Flag only if the expected language's own
             confidence falls below this.
@@ -247,7 +274,8 @@ def is_wrong_language(
         return (False, "unknown", 0.0)
     ensure_languages([expected_code], source_language)
 
-    filtered = _script_filter(cleaned, expected_lang, expected_code)
+    filtered = _strip_source_tokens(cleaned, msgid)
+    filtered = _script_filter(filtered, expected_lang, expected_code)
     if len(filtered) < min_detection_length:
         return (False, "unknown", 0.0)
 
