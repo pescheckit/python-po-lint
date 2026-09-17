@@ -4,14 +4,13 @@ dynamic = ["version"]
 description = "Lint .po translation files for contamination, wrong languages, shifts, and garbled text"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 authors = [
     {name = "PesCheck"},
 ]
 dependencies = [
     "polib>=1.2",
-    "fasttext-wheel>=0.9.2",
-    "numpy<2",
+    "lingua-language-detector>=2.2",
 ]
 
 [project.scripts]

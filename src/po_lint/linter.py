@@ -15,7 +15,13 @@ from po_lint.checks import (
     check_shifted_entry,
     check_wrong_script,
 )
-from po_lint.detector import DEFAULT_MIN_DETECTION_LENGTH, is_wrong_language
+from po_lint.detector import (
+    DEFAULT_EXPECTED_CONFIDENCE_MAX,
+    DEFAULT_MIN_DETECTION_LENGTH,
+    DEFAULT_TOP_CONFIDENCE_MIN,
+    ensure_languages,
+    is_wrong_language,
+)
 
 log = logging.getLogger(__name__)
 
@@ -113,12 +119,13 @@ def lint_po_file(
     po_file: Path,
     locale: str | None = None,
     source_language: str = "en",
-    confidence_threshold: float = 0.5,
+    confidence_threshold: float = DEFAULT_TOP_CONFIDENCE_MIN,
     min_text_length: int = 3,
     min_detection_length: int = DEFAULT_MIN_DETECTION_LENGTH,
     ignore_patterns: list[str] | None = None,
     ignore_rules: list[IgnoreRule] | None = None,
     disable: list[str] | None = None,
+    expected_confidence_max: float = DEFAULT_EXPECTED_CONFIDENCE_MAX,
 ) -> list[Issue]:
     """Lint a single .po file and return all issues found."""
     if locale is None:
@@ -246,11 +253,12 @@ def lint_po_file(
                 issue.line = entry.linenum
                 issues.append(issue)
 
-        # 4. Wrong language check (uses fastText)
+        # 4. Wrong language check (uses lingua)
         if "wrong_language" not in disabled:
             is_wrong, detected_lang, confidence = is_wrong_language(
                 msgstr, locale, confidence_threshold, source_language, msgid=msgid,
                 min_detection_length=min_detection_length,
+                expected_confidence_max=expected_confidence_max,
             )
             if is_wrong:
                 issues.append(
@@ -332,11 +340,12 @@ def lint_locale_dir(
     locale_dir: Path,
     languages: list[str] | None = None,
     source_language: str = "en",
-    confidence_threshold: float = 0.5,
+    confidence_threshold: float = DEFAULT_TOP_CONFIDENCE_MIN,
     min_text_length: int = 3,
     min_detection_length: int = DEFAULT_MIN_DETECTION_LENGTH,
     ignore_patterns: list[str] | None = None,
     disable: list[str] | None = None,
+    expected_confidence_max: float = DEFAULT_EXPECTED_CONFIDENCE_MAX,
 ) -> list[Issue]:
     """Lint all .po files in a locale directory.
 
@@ -357,12 +366,20 @@ def lint_locale_dir(
     detected_source = detect_source_language(locale_dir)
     effective_source = detected_source or source_language
 
-    issues = []
-
+    po_files = []
+    locales_present = set()
     for po_file in sorted(locale_dir.rglob("*.po")):
         locale = extract_locale_from_path(po_file)
         if locale is None:
             continue
+        po_files.append((po_file, locale))
+        locales_present.add(locale)
+
+    # The detector's candidate set is the languages that can occur here
+    ensure_languages(locales_present, effective_source)
+
+    issues = []
+    for po_file, locale in po_files:
         if languages and locale not in languages:
             continue
 
@@ -376,6 +393,7 @@ def lint_locale_dir(
             ignore_patterns=ignore_patterns,
             ignore_rules=ignore_rules,
             disable=disable,
+            expected_confidence_max=expected_confidence_max,
         )
         issues.extend(file_issues)
 

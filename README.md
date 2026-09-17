@@ -2,11 +2,11 @@
 
 Lint `.po` translation files for contamination, wrong languages, missing translations, shifts, and garbled text.
 
-Uses [fastText](https://fasttext.cc/) language identification with carrier phrase confirmation and confused language score merging for high accuracy with zero false positives.
+Uses [lingua](https://github.com/pemistahl/lingua-py) language identification with carrier phrase confirmation and confused language score merging for high accuracy with zero false positives.
 
 ## Features
 
-- **Wrong language detection** — fastText-based with top-5 scoring, confused language merging, and carrier phrase confirmation
+- **Wrong language detection** — lingua-based, restricted to the languages in your catalogs, with a relative confidence rule and script filtering
 - **Wrong script detection** — catches Cyrillic in a Dutch file, Arabic in French, Latin in Chinese, etc.
 - **Distinctive character detection** — catches Russian-specific chars in Ukrainian and vice versa
 - **Fuzzy entry detection** — flags entries with the fuzzy flag that need review
@@ -29,7 +29,7 @@ Or with uv:
 uv add python-po-lint
 ```
 
-The fastText language model (~126MB) is downloaded automatically on first run to `~/.cache/po-lint/`.
+Language models ship inside the lingua wheel; nothing is downloaded at runtime.
 
 ## Usage
 
@@ -43,7 +43,7 @@ po-lint
 # Only check specific languages
 po-lint locale/ --languages fr de nl
 
-# Use compact model (917KB, less accurate)
+# Use lingua's low accuracy mode (faster, less reliable on short text)
 po-lint locale/ --compact-model
 
 # JSON output
@@ -80,8 +80,11 @@ languages = []
 # Source language — detections matching this are allowed (borrowed words)
 source_language = "en"
 
-# Minimum confidence to flag wrong language (0.0 - 1.0)
-confidence_threshold = 0.5
+# Flag only when another language tops this confidence (0.0 - 1.0)
+confidence_threshold = 0.7
+
+# ...while the expected language's own confidence is below this
+expected_confidence_max = 0.1
 
 # Minimum cleaned text length for language detection
 min_detection_length = 30
@@ -89,7 +92,7 @@ min_detection_length = 30
 # Skip entries with msgstr shorter than this
 min_text_length = 3
 
-# Use compact fastText model instead of full
+# Use lingua's low accuracy mode instead of the default high accuracy mode
 compact_model = false
 
 # Disable specific checks
@@ -127,10 +130,11 @@ screening status::Some msgid
 5. **Distinctive character check** — detects cross-contamination between languages sharing a script (e.g. Russian/Ukrainian).
 6. **Garbled text check** — flags corrupted unicode.
 7. **Shifted entry check** — flags suspiciously short translations for long source strings.
-8. **Wrong language check** — uses fastText with three layers of false positive prevention:
-   - **Confused language score merging** — redistributes scores from commonly confused languages (e.g. Danish/Norwegian, Portuguese/Spanish)
-   - **Source language allowance** — borrowed words from the source language are common and allowed
-   - **Carrier phrase confirmation** — re-tests with a language-specific phrase prepended to distinguish false positives from real contamination
+8. **Wrong language check** — uses lingua with four layers of false positive prevention:
+   - **Restricted candidate set** — the detector only considers the languages present in the linted catalogs plus the source language, so text can't be attributed to exotic lookalikes
+   - **Source token stripping** — msgstr tokens copied verbatim from the msgid (loan words, product nouns, quoted terms) are dropped before detection; a translation that is mostly untranslatable jargon is skipped rather than misjudged
+   - **Script filtering** — tokens in a script the locale doesn't use are stripped before detection instead of drowning out the native text
+   - **Relative confidence rule** — flags only when the expected language scores below `expected_confidence_max` while another language tops `confidence_threshold`, i.e. the text is clearly NOT the expected language, not merely closer to a sibling
 
 ## License
 
